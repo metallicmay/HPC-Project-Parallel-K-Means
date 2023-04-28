@@ -12,22 +12,22 @@
 
 int maxiter = pow(10, 3);
 
-double get_dist(double i1, double j1, double i2, double j2)
+double get_dist_squared(double i1, double j1, double i2, double j2)
 {
     // calculate Euclidean distance between (i1, j1) and (i2, j2)
-    return sqrt(pow(i1 - i2, 2) + pow(j1 - j2, 2));
+    return (i1 - i2) * (i1 - i2) + (j1 - j2) * (j1 - j2);
 }
 
 int cluster_match(const std::vector<std::vector<double>> &k_centers, double dow, double hod)
 {
     int closest_index = 0;
-    double shortest_dist = get_dist(dow, hod, k_centers[0][0], k_centers[0][1]);
+    double shortest_dist_squared = get_dist_squared(dow, hod, k_centers[0][0], k_centers[0][1]);
     for (int i = 1; i < k_centers.size(); i++)
     {
-        double new_dist = get_dist(dow, hod, k_centers[i][0], k_centers[i][1]);
-        if (new_dist < shortest_dist)
+        double new_dist_squared = get_dist_squared(dow, hod, k_centers[i][0], k_centers[i][1]);
+        if (new_dist_squared < shortest_dist_squared)
         {
-            shortest_dist = new_dist;
+            shortest_dist_squared = new_dist_squared;
             closest_index = i;
         }
     }
@@ -60,7 +60,7 @@ std::vector<std::vector<double>> sequential_k_means(std::vector<std::vector<doub
         converged = true;
         for (int i = 0; i < k; i++)
         {
-            if (get_dist(old_k_centers[i][0], old_k_centers[i][1], new_k_centers[i][0], new_k_centers[i][1]) > 1e-2)
+            if (get_dist_squared(old_k_centers[i][0], old_k_centers[i][1], new_k_centers[i][0], new_k_centers[i][1]) > 1e-2)
             {
                 converged = false;
                 break;
@@ -92,7 +92,7 @@ std::vector<std::vector<double>> parallel_k_means(std::vector<std::vector<double
     do
     {
         iter++;
-        MPI_Scatter(&dataset[0], elements_per_proc, MPI_FLOAT, &local_dataset[0],
+        MPI_Scatter(dataset.data(), elements_per_proc, MPI_FLOAT, local_dataset.data(),
                     elements_per_proc, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
         std::vector<int> num_members;
@@ -127,7 +127,7 @@ std::vector<std::vector<double>> parallel_k_means(std::vector<std::vector<double
         {
             new_k_centers[i][0] = old_k_centers[i][0] + global_displacement0[i];
             new_k_centers[i][1] = old_k_centers[i][1] + global_displacement1[i];
-            if (get_dist(old_k_centers[i][0], old_k_centers[i][1], new_k_centers[i][0], new_k_centers[i][1]) > 1e-2)
+            if (get_dist_squared(old_k_centers[i][0], old_k_centers[i][1], new_k_centers[i][0], new_k_centers[i][1]) > 1e-2)
             {
                 converged = false;
             }
@@ -170,23 +170,22 @@ int main(int argc, char **argv)
     std::vector<std::vector<double>> initial_k_centers;
     for (int i = 0; i < k; i++)
     {
-        int index = rand() % N;
-        for (int j = 0; j < i; j++)
+        int index;
+        bool far_enough;
+        do
         {
-            bool far_enough = false;
-            do
+            index = rand() % N;
+            far_enough = true;
+            for (int j = 0; j < i; j++)
             {
-                if (get_dist(initial_k_centers[j][0], initial_k_centers[j][1], dataset[index][0], dataset[index][1]) >= 1)
+                if (get_dist_squared(initial_k_centers[j][0], initial_k_centers[j][1], dataset[index][0], dataset[index][1]) <= 1)
                 {
-                    far_enough = true;
+                    far_enough = false;
+                    break;
                 }
-                else
-                {
-                    index = rand() % N;
-                }
-            } while (far_enough);
-        }
-        initial_k_centers.push_back({dataset[index][0], dataset[index][1]});
+            }
+        } while (not far_enough);
+        initial_k_centers.push_back({double(dataset[index][0]), double(dataset[index][1])});
     }
 
     Timer t;
