@@ -15,19 +15,19 @@
 int maxiter = 10000;
 double convergence_bar = 1e-5;
 
-double get_dist_squared(double i1, double j1, double i2, double j2)
+double get_dist_squared(double order_number1, double order_dow1, double order_hour_of_day1, double department_id1, double order_number2, double order_dow2, double order_hour_of_day2, double department_id2)
 {
-    // calculate Euclidean distance between (i1, j1) and (i2, j2)
-    return (i1 - i2) * (i1 - i2) + (j1 - j2) * (j1 - j2);
+    // calculate squared Euclidean distance between two quadraples
+    return (order_number1 - order_number2) * (order_number1 - order_number2) + (order_dow1 - order_dow2) * (order_dow1 - order_dow2) + (order_hour_of_day1 - order_hour_of_day2) * (order_hour_of_day1 - order_hour_of_day2) + (department_id1 - department_id2) * (department_id1 - department_id2);
 }
 
-int cluster_match(const std::vector<std::vector<double>> &k_centers, double dow, double hod)
+int cluster_match(const std::vector<std::vector<double>> &k_centers, double order_number, double order_dow, double order_hour_of_day, double department_id)
 {
     int closest_index = 0;
-    double shortest_dist_squared = get_dist_squared(dow, hod, k_centers[0][0], k_centers[0][1]);
+    double shortest_dist_squared = get_dist_squared(order_number, order_dow, order_hour_of_day, department_id, k_centers[0][0], k_centers[0][1], k_centers[0][2], k_centers[0][3]);
     for (int i = 1; i < k_centers.size(); i++)
     {
-        double new_dist_squared = get_dist_squared(dow, hod, k_centers[i][0], k_centers[i][1]);
+        double new_dist_squared = get_dist_squared(order_number, order_dow, order_hour_of_day, department_id, k_centers[i][0], k_centers[i][1], k_centers[i][2], k_centers[i][3]);
         if (new_dist_squared < shortest_dist_squared)
         {
             shortest_dist_squared = new_dist_squared;
@@ -54,17 +54,19 @@ std::vector<std::vector<double>> sequential_k_means(std::vector<std::vector<doub
 
         for (int i = 0; i < N; i++)
         {
-            int closest_index = cluster_match(old_k_centers, dataset[2 * i], dataset[2 * i + 1]);
+            int closest_index = cluster_match(old_k_centers, dataset[4 * i], dataset[4 * i + 1], dataset[4 * i + 2], dataset[4 * i + 3]);
             // record how the center should be updated
-            new_k_centers[closest_index][0] = (new_k_centers[closest_index][0] * num_members[closest_index] + dataset[2 * i]) / (num_members[closest_index] + 1);
-            new_k_centers[closest_index][1] = (new_k_centers[closest_index][1] * num_members[closest_index] + dataset[2 * i + 1]) / (num_members[closest_index] + 1);
+            new_k_centers[closest_index][0] = (new_k_centers[closest_index][0] * num_members[closest_index] + dataset[4 * i]) / (num_members[closest_index] + 1);
+            new_k_centers[closest_index][1] = (new_k_centers[closest_index][1] * num_members[closest_index] + dataset[4 * i + 1]) / (num_members[closest_index] + 1);
+            new_k_centers[closest_index][2] = (new_k_centers[closest_index][2] * num_members[closest_index] + dataset[4 * i + 2]) / (num_members[closest_index] + 1);
+            new_k_centers[closest_index][3] = (new_k_centers[closest_index][3] * num_members[closest_index] + dataset[4 * i + 3]) / (num_members[closest_index] + 1);
             num_members[closest_index]++;
         }
         // calculate by how much each center has moved. Declare convergence if none of the centers moved more than 1e-2
         converged = true;
         for (int i = 0; i < k; i++)
         {
-            if (get_dist_squared(old_k_centers[i][0], old_k_centers[i][1], new_k_centers[i][0], new_k_centers[i][1]) > convergence_bar)
+            if (get_dist_squared(old_k_centers[i][0], old_k_centers[i][1], old_k_centers[i][2], old_k_centers[i][3], new_k_centers[i][0], new_k_centers[i][1], new_k_centers[i][2], new_k_centers[i][3]) > convergence_bar)
             {
                 converged = false;
                 break;
@@ -92,15 +94,15 @@ std::vector<std::vector<double>> parallel_k_means(std::vector<std::vector<double
     MPI_Comm_size(MPI_COMM_WORLD, &total);
 
     int elements_per_proc = floor(double(N) / total);
-    std::vector<int> local_dataset(elements_per_proc * 2);
+    std::vector<int> local_dataset(elements_per_proc * 4);
 
     bool converged = true;
     int iter = 0;
     do
     {
         iter++;
-        MPI_Scatter(dataset.data(), 2 * elements_per_proc, MPI_INT, local_dataset.data(),
-                    2 * elements_per_proc, MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Scatter(dataset.data(), 4 * elements_per_proc, MPI_INT, local_dataset.data(),
+                    4 * elements_per_proc, MPI_INT, 0, MPI_COMM_WORLD);
 
         std::vector<int> num_members;
         std::vector<std::vector<double>> new_k_centers(old_k_centers);
@@ -112,23 +114,29 @@ std::vector<std::vector<double>> parallel_k_means(std::vector<std::vector<double
 
         for (int i = 0; i < elements_per_proc; i++)
         {
-            int closest_index = cluster_match(old_k_centers, local_dataset[2 * i], local_dataset[2 * i + 1]);
+            int closest_index = cluster_match(old_k_centers, local_dataset[4 * i], local_dataset[4 * i + 1], local_dataset[4 * i + 2], local_dataset[2 * i + 3]);
             // record how the center should be updated
-            new_k_centers[closest_index][0] = (new_k_centers[closest_index][0] * num_members[closest_index] + local_dataset[2 * i]) / (num_members[closest_index] + 1);
-            new_k_centers[closest_index][1] = (new_k_centers[closest_index][1] * num_members[closest_index] + local_dataset[2 * i + 1]) / (num_members[closest_index] + 1);
+            new_k_centers[closest_index][0] = (new_k_centers[closest_index][0] * num_members[closest_index] + local_dataset[4 * i]) / (num_members[closest_index] + 1);
+            new_k_centers[closest_index][1] = (new_k_centers[closest_index][1] * num_members[closest_index] + local_dataset[4 * i + 1]) / (num_members[closest_index] + 1);
+            new_k_centers[closest_index][2] = (new_k_centers[closest_index][2] * num_members[closest_index] + local_dataset[4 * i + 2]) / (num_members[closest_index] + 1);
+            new_k_centers[closest_index][3] = (new_k_centers[closest_index][3] * num_members[closest_index] + local_dataset[4 * i + 3]) / (num_members[closest_index] + 1);
             num_members[closest_index]++;
         }
 
         // calculuate displacement in each center within each thread and allreduce
-        std::vector<double> local_displacement0, local_displacement1;
-        std::vector<double> global_displacement0(k), global_displacement1(k);
+        std::vector<double> local_displacement0, local_displacement1, local_displacement2, local_displacement3;
+        std::vector<double> global_displacement0(k), global_displacement1(k), global_displacement2(k), global_displacement3(k);
         for (int i = 0; i < k; i++)
         {
             local_displacement0.push_back(new_k_centers[i][0] - old_k_centers[i][0]);
             local_displacement1.push_back(new_k_centers[i][1] - old_k_centers[i][1]);
+            local_displacement2.push_back(new_k_centers[i][2] - old_k_centers[i][2]);
+            local_displacement3.push_back(new_k_centers[i][3] - old_k_centers[i][3]);
         }
         MPI_Allreduce(local_displacement0.data(), global_displacement0.data(), k, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         MPI_Allreduce(local_displacement1.data(), global_displacement1.data(), k, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        MPI_Allreduce(local_displacement2.data(), global_displacement2.data(), k, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        MPI_Allreduce(local_displacement3.data(), global_displacement3.data(), k, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         // calculate by how much each center has moved. Declare convergence if none of the centers moved more than 1e-2. broadcast the convergence result to all threads
         converged = true;
 
@@ -136,7 +144,9 @@ std::vector<std::vector<double>> parallel_k_means(std::vector<std::vector<double
         {
             new_k_centers[i][0] = old_k_centers[i][0] + global_displacement0[i] / total;
             new_k_centers[i][1] = old_k_centers[i][1] + global_displacement1[i] / total;
-            if (get_dist_squared(old_k_centers[i][0], old_k_centers[i][1], new_k_centers[i][0], new_k_centers[i][1]) > convergence_bar)
+            new_k_centers[i][2] = old_k_centers[i][2] + global_displacement2[i] / total;
+            new_k_centers[i][3] = old_k_centers[i][3] + global_displacement3[i] / total;
+            if (get_dist_squared(old_k_centers[i][0], old_k_centers[i][1], old_k_centers[i][2], old_k_centers[i][3], new_k_centers[i][0], new_k_centers[i][1], new_k_centers[i][2], new_k_centers[i][3]) > convergence_bar)
             {
                 converged = false;
             }
@@ -161,9 +171,8 @@ std::vector<std::vector<double>> parallel_k_means(std::vector<std::vector<double
 
 int main(int argc, char **argv)
 {
-    // read data from the kaggle dataset and store the order_dow and order_hour_of_day respectively in order into dow and hod
-    // int N = 2019501; // change this if some data have missing order_dow or order_hour_of_day
-
+    // read data from the kaggle dataset and store the (order_number, order_dow, order_hour_of_day, department_id)respectively in order into dataset
+    // int N = 2019501;
     if (argc < 2)
     {
         printf("Usage: mpirun -#processes ./k_means k \n");
@@ -174,8 +183,10 @@ int main(int argc, char **argv)
     std::vector<int> dataset;
     for (int i = 0; i < N; i++)
     {
+        dataset.push_back(i % 100);
         dataset.push_back(i % 7);
         dataset.push_back(i % 24);
+        dataset.push_back(i % 20);
     }
 
     // initialize k centers
@@ -191,15 +202,14 @@ int main(int argc, char **argv)
             far_enough = true;
             for (int j = 0; j < i; j++)
             {
-                if (get_dist_squared(initial_k_centers[j][0], initial_k_centers[j][1], dataset[2 * index], dataset[2 * index + 1]) <= 1)
+                if (get_dist_squared(initial_k_centers[j][0], initial_k_centers[j][1], initial_k_centers[j][2], initial_k_centers[j][3], dataset[4 * index], dataset[4 * index + 1], dataset[4 * index + 2], dataset[4 * index + 3]) <= 1)
                 {
                     far_enough = false;
                     break;
                 }
             }
         } while (not far_enough);
-        // printf("center %d is (%d, %d)\n", i, dataset[2 * index], dataset[2 * index + 1]);
-        initial_k_centers.push_back({double(dataset[2 * index]), double(dataset[2 * index + 1])});
+        initial_k_centers.push_back({double(dataset[4 * index]), double(dataset[4 * index + 1]), double(dataset[4 * index + 2]), double(dataset[4 * index + 3])});
     }
     // printf("managed to initialize k centers\n");
 
@@ -217,7 +227,7 @@ int main(int argc, char **argv)
         printf("The centers of the k clusters identified by the sequential approach are:\n");
         for (int i = 0; i < k; i++)
         {
-            printf("(%f, %f)\n", sequential_k_means_centers[i][0], sequential_k_means_centers[i][1]);
+            printf("(%f, %f, %f, %f)\n", sequential_k_means_centers[i][0], sequential_k_means_centers[i][1], sequential_k_means_centers[i][2], sequential_k_means_centers[i][3]);
         }
     }
 
@@ -231,7 +241,7 @@ int main(int argc, char **argv)
         printf("The centers of the k clusters identified by the parallel approach are:\n");
         for (int i = 0; i < k; i++)
         {
-            printf("(%f, %f)\n", parallel_k_means_centers[i][0], parallel_k_means_centers[i][1]);
+            printf("(%f, %f, %f, %f)\n", parallel_k_means_centers[i][0], parallel_k_means_centers[i][1], parallel_k_means_centers[i][2], parallel_k_means_centers[i][3]);
         }
     }
     MPI_Finalize();
