@@ -12,7 +12,8 @@
 #include <iostream>
 #include <vector>
 
-int maxiter = 1000;
+int maxiter = 10000;
+double convergence_bar = 1e-5;
 
 double get_dist_squared(double i1, double j1, double i2, double j2)
 {
@@ -63,7 +64,7 @@ std::vector<std::vector<double>> sequential_k_means(std::vector<std::vector<doub
         converged = true;
         for (int i = 0; i < k; i++)
         {
-            if (get_dist_squared(old_k_centers[i][0], old_k_centers[i][1], new_k_centers[i][0], new_k_centers[i][1]) > 1)
+            if (get_dist_squared(old_k_centers[i][0], old_k_centers[i][1], new_k_centers[i][0], new_k_centers[i][1]) > convergence_bar)
             {
                 converged = false;
                 break;
@@ -78,6 +79,7 @@ std::vector<std::vector<double>> sequential_k_means(std::vector<std::vector<doub
         }
         */
     } while (not converged and iter <= maxiter);
+    printf("The sequential k means takes %d iterations.\n", iter);
     return old_k_centers;
 }
 
@@ -134,14 +136,13 @@ std::vector<std::vector<double>> parallel_k_means(std::vector<std::vector<double
         {
             new_k_centers[i][0] = old_k_centers[i][0] + global_displacement0[i] / total;
             new_k_centers[i][1] = old_k_centers[i][1] + global_displacement1[i] / total;
-            if (get_dist_squared(old_k_centers[i][0], old_k_centers[i][1], new_k_centers[i][0], new_k_centers[i][1]) > 1)
+            if (get_dist_squared(old_k_centers[i][0], old_k_centers[i][1], new_k_centers[i][0], new_k_centers[i][1]) > convergence_bar)
             {
                 converged = false;
             }
         }
-
-        /*
         old_k_centers = new_k_centers;
+        /*
         if (!rank)
         {
             printf("After iteration # %d, the centers of the k clusters identified by the parallel approach are:\n", iter);
@@ -153,7 +154,8 @@ std::vector<std::vector<double>> parallel_k_means(std::vector<std::vector<double
         */
 
     } while (not converged and iter <= maxiter);
-
+    if (rank == 0)
+        printf("The parallel k means takes %d iterations.\n", iter);
     return old_k_centers;
 }
 
@@ -226,7 +228,6 @@ int main(int argc, char **argv)
     if (!rank)
     {
         printf("parallel k means takes %e s\n", tt);
-
         printf("The centers of the k clusters identified by the parallel approach are:\n");
         for (int i = 0; i < k; i++)
         {
