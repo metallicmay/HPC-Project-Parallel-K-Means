@@ -183,8 +183,8 @@ int main(int argc, char **argv)
 
     int N = 2019501;
     std::vector<int> dataset;
-    ifstream orderDetails ("supermarket_order_details.csv");
-    string line;
+    std::ifstream orderDetails ("supermarket_order_details.csv");
+    std::string line;
     char *output, *tok;
     if(orderDetails.is_open()) {
         while (!orderDetails.eof()) {
