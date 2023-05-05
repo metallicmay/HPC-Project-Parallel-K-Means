@@ -10,6 +10,8 @@
 #include <cmath>
 #include <mpi.h>
 #include <iostream>
+#include <fstream>
+#include <cstring>
 #include <vector>
 
 int maxiter = 10000;
@@ -171,23 +173,39 @@ std::vector<std::vector<double>> parallel_k_means(std::vector<std::vector<double
 
 int main(int argc, char **argv)
 {
-    // read data from the kaggle dataset and store the (order_number, order_dow, order_hour_of_day, department_id)respectively in order into dataset
-    // int N = 2019501;
     if (argc < 2)
     {
         printf("Usage: mpirun -#processes ./k_means k \n");
         abort();
     }
+    // read data from the kaggle dataset and store the (order_number, order_dow, order_hour_of_day, department_id)respectively in order into dataset
+    // int N = 2019501;
 
-    int N = 2000000;
+    int N = 2019501;
     std::vector<int> dataset;
-    for (int i = 0; i < N; i++)
+    ifstream orderDetails ("supermarket_order_details.csv");
+    string line;
+    char *output, *tok;
+    if(orderDetails.is_open()) {
+        while (!orderDetails.eof()) {
+            getline(orderDetails, line);
+            output = const_cast <char *> (line.c_str());
+            tok = strtok(output, ",");
+            while (tok != NULL) {
+                int tokLength = strlen(tok);
+                dataset.push_back(atoi(tok));
+                tok = strtok(NULL, ",");
+            }
+        }
+    }
+    orderDetails.close();
+/*    for (int i = 0; i < N; i++) //dummy data
     {
         dataset.push_back(i % 100);
         dataset.push_back(i % 7);
         dataset.push_back(i % 24);
         dataset.push_back(i % 20);
-    }
+    }*/
 
     // initialize k centers
     int k = atoi(argv[1]);
