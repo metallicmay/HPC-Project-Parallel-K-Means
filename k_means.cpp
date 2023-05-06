@@ -181,7 +181,7 @@ int main(int argc, char **argv)
     // read data from the kaggle dataset and store the (order_number, order_dow, order_hour_of_day, department_id)respectively in order into dataset
     // int N = 2019501;
 
-    int N = 2019501;
+    int N;
     std::vector<int> dataset;
     std::ifstream orderDetails ("supermarket_order_details.csv");
     std::string line;
@@ -199,13 +199,7 @@ int main(int argc, char **argv)
         }
     }
     orderDetails.close();
-/*    for (int i = 0; i < N; i++) //dummy data
-    {
-        dataset.push_back(i % 100);
-        dataset.push_back(i % 7);
-        dataset.push_back(i % 24);
-        dataset.push_back(i % 20);
-    }*/
+    N = dataset.size() / 4;
 
     // initialize k centers
     int k = atoi(argv[1]);
