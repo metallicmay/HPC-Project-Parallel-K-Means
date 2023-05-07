@@ -39,14 +39,13 @@ int cluster_match(const std::vector<std::vector<double>> &k_centers, double orde
     return closest_index;
 }
 
-std::vector<std::vector<double>> sequential_k_means(std::vector<std::vector<double>> old_k_centers, const std::vector<int> &dataset, int N)
+std::vector<std::vector<double>> sequential_k_means(std::vector<std::vector<double>> old_k_centers, const std::vector<int> &dataset, int N, int &sequential_iter)
 {
     int k = old_k_centers.size();
     bool converged;
-    int iter = 0;
     do
     {
-        iter++;
+        sequential_iter++;
         std::vector<int> num_members;
         std::vector<std::vector<double>> new_k_centers(old_k_centers);
         for (int i = 0; i < k; i++)
@@ -75,19 +74,11 @@ std::vector<std::vector<double>> sequential_k_means(std::vector<std::vector<doub
             }
         }
         old_k_centers = new_k_centers;
-        /*
-        printf("After iteration # %d, the centers of the k clusters identified by the sequential approach are:\n", iter);
-        for (int i = 0; i < k; i++)
-        {
-            printf("(%f, %f)\n", old_k_centers[i][0], old_k_centers[i][1]);
-        }
-        */
-    } while (not converged and iter <= maxiter);
-    printf("The sequential k means takes %d iterations.\n", iter);
+    } while (not converged and sequential_iter <= maxiter);
     return old_k_centers;
 }
 
-std::vector<std::vector<double>> parallel_k_means(std::vector<std::vector<double>> old_k_centers, const std::vector<int> &dataset, int N)
+std::vector<std::vector<double>> parallel_k_means(std::vector<std::vector<double>> old_k_centers, const std::vector<int> &dataset, int N, int &parallel_iter)
 {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -99,10 +90,9 @@ std::vector<std::vector<double>> parallel_k_means(std::vector<std::vector<double
     std::vector<int> local_dataset(elements_per_proc * 4);
 
     bool converged = true;
-    int iter = 0;
     do
     {
-        iter++;
+        parallel_iter++;
         MPI_Scatter(dataset.data(), 4 * elements_per_proc, MPI_INT, local_dataset.data(),
                     4 * elements_per_proc, MPI_INT, 0, MPI_COMM_WORLD);
 
@@ -154,20 +144,7 @@ std::vector<std::vector<double>> parallel_k_means(std::vector<std::vector<double
             }
         }
         old_k_centers = new_k_centers;
-        /*
-        if (!rank)
-        {
-            printf("After iteration # %d, the centers of the k clusters identified by the parallel approach are:\n", iter);
-            for (int i = 0; i < k; i++)
-            {
-                printf("(%f, %f)\n", old_k_centers[i][0], old_k_centers[i][1]);
-            }
-        }
-        */
-
-    } while (not converged and iter <= maxiter);
-    if (rank == 0)
-        printf("The parallel k means takes %d iterations.\n", iter);
+    } while (not converged and parallel_iter <= maxiter);
     return old_k_centers;
 }
 
@@ -178,20 +155,28 @@ int main(int argc, char **argv)
         printf("Usage: mpirun -#processes ./k_means k \n");
         abort();
     }
+
+    MPI_Init(&argc, &argv);
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    int total;
+    MPI_Comm_size(MPI_COMM_WORLD, &total);
     // read data from the kaggle dataset and store the (order_number, order_dow, order_hour_of_day, department_id)respectively in order into dataset
-    // int N = 2019501;
 
     int N;
     std::vector<int> dataset;
-    std::ifstream orderDetails ("supermarket_order_details.csv");
+    std::ifstream orderDetails("supermarket_order_details.csv");
     std::string line;
     char *output, *tok;
-    if(orderDetails.is_open()) {
-        while (!orderDetails.eof()) {
+    if (orderDetails.is_open())
+    {
+        while (!orderDetails.eof())
+        {
             getline(orderDetails, line);
-            output = const_cast <char *> (line.c_str());
+            output = const_cast<char *>(line.c_str());
             tok = strtok(output, ",");
-            while (tok != NULL) {
+            while (tok != NULL)
+            {
                 int tokLength = strlen(tok);
                 dataset.push_back(atoi(tok));
                 tok = strtok(NULL, ",");
@@ -202,6 +187,7 @@ int main(int argc, char **argv)
     N = dataset.size() / 4;
 
     // initialize k centers
+    double initialization_time = MPI_Wtime();
     int k = atoi(argv[1]);
     std::vector<std::vector<double>> initial_k_centers;
     for (int i = 0; i < k; i++)
@@ -223,19 +209,20 @@ int main(int argc, char **argv)
         } while (not far_enough);
         initial_k_centers.push_back({double(dataset[4 * index]), double(dataset[4 * index + 1]), double(dataset[4 * index + 2]), double(dataset[4 * index + 3])});
     }
-    // printf("managed to initialize k centers\n");
+    initialization_time = MPI_Wtime() - initialization_time;
+    printf("Initialization of k centers takes %f seconds.\n", initialization_time);
 
-    MPI_Init(&argc, &argv);
-    int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    int total;
-    MPI_Comm_size(MPI_COMM_WORLD, &total);
+    int sequential_iter = 0, parallel_iter = 0;
+
     double tt = MPI_Wtime();
-    std::vector<std::vector<double>> sequential_k_means_centers = sequential_k_means(initial_k_centers, dataset, N);
+    std::vector<std::vector<double>> sequential_k_means_centers = sequential_k_means(initial_k_centers, dataset, N, sequential_iter);
     tt = MPI_Wtime() - tt;
+
     if (!rank)
     {
-        printf("Sequential k means takes %e s\n", tt);
+        printf("Sequential k means takes %e s, %d iterations\n", tt, sequential_iter);
+        printf("The flop rate is %f GFlops /s\n", double(15 * k) * N * sequential_iter / tt / 1e9);
+        printf("The bandwith is %f GB/s\n", (N * (16 + k) * sizeof(double) + (2 * N) * sizeof(int)) / tt / 1e9);
         printf("The centers of the k clusters identified by the sequential approach are:\n");
         for (int i = 0; i < k; i++)
         {
@@ -244,12 +231,14 @@ int main(int argc, char **argv)
     }
 
     tt = MPI_Wtime();
-    std::vector<std::vector<double>> parallel_k_means_centers = parallel_k_means(initial_k_centers, dataset, N);
+    std::vector<std::vector<double>> parallel_k_means_centers = parallel_k_means(initial_k_centers, dataset, N, parallel_iter);
     tt = MPI_Wtime() - tt;
 
     if (!rank)
     {
-        printf("parallel k means takes %e s\n", tt);
+        printf("Parallel k means takes %e s, %d iterations\n", tt, parallel_iter);
+        printf("The flop rate is %fGFlops /s\n", double(15 * k) * N * parallel_iter / tt / 1e9);
+        printf("The bandwith is %f GB/s\n", (N * (16 + k) * sizeof(double) + (2 * N) * sizeof(int)) / tt / 1e9);
         printf("The centers of the k clusters identified by the parallel approach are:\n");
         for (int i = 0; i < k; i++)
         {
