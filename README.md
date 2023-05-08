@@ -4,7 +4,7 @@ Spring 2023 High Performance Computing course (Georg Stadler)
 Input Dataset - [Supermarket dataset for predictive marketing 2023](https://www.kaggle.com/datasets/hunter0007/ecommerce-dataset-for-predictive-marketing-2023?datasetId=2772962&sortBy=dateRun&tab=profile)
 
 Steps to run the program on NYU's Greene HPC servers:
-1. Login to Greene with ssh <netID>@greene.hpc.nyu.edu
+1. Login to Greene with ```ssh <netID>@greene.hpc.nyu.edu```
 2. Create a new directory to store the project files, eg: ```mkdir project```
 3. ```cd project```
 4. Clone the project from this github repo into your new project directory: ```https://github.com/metallicmay/HPC-Project-Parallel-K-Means.git```
