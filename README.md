@@ -7,7 +7,7 @@ Steps to run the program on NYU's Greene HPC servers:
 1. Login to Greene with ```ssh <netID>@greene.hpc.nyu.edu```
 2. Create a new directory to store the project files, eg: ```mkdir project```
 3. ```cd project```
-4. Clone the project from this github repo into your new project directory: ```https://github.com/metallicmay/HPC-Project-Parallel-K-Means.git```
+4. Clone the project from this github repo into your new project directory: ```git clone https://github.com/metallicmay/HPC-Project-Parallel-K-Means.git```
 5. Load gcc module to compile main program: ```module load openmpi/gcc/4.0.5```
 6. Compile the main program: ```mpic++ -std=c++11 -g k_means.cpp -o k_means```
 7. Once kmeans executable is created, run the sbatch file: ```sbatch k_means.sbatch```
