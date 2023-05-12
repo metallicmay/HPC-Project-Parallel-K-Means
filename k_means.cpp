@@ -13,6 +13,7 @@
 #include <fstream>
 #include <cstring>
 #include <vector>
+#include <time.h>
 
 int maxiter = 10000;
 double convergence_bar = 1e-5;
@@ -193,6 +194,7 @@ int main(int argc, char **argv)
     std::vector<double> initial_k_centers(4 * k);
     if (rank == 0)
     {
+        srand(time(0));
         for (int i = 0; i < k; i++)
         {
             int index;
